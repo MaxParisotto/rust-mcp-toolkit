@@ -1,24 +1,39 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
+import Ajv from 'ajv';
+import { 
+  Request,
+  Tool,
   CallToolRequestSchema,
   ErrorCode,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   McpError,
-  ReadResourceRequestSchema,
+  ReadResourceRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
+import { TextDocuments } from 'vscode-languageserver';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import {
+  Diagnostic,
+  DiagnosticSeverity,
+  Position,
+  Range
+} from 'vscode-languageserver-types';
+import { ProposedFeatures, createConnection } from 'vscode-languageserver';
 
 class RustAssistantServer {
   private server: Server;
+  private tools: Tool[] = [];
+  private errorHandlers: any[] = [];
+  private ajv: any;
 
   constructor() {
     this.server = new Server(
       {
         name: 'rust-assistant',
-        version: '0.1.0',
+        version: '0.2.0',
       },
       {
         capabilities: {
@@ -30,8 +45,8 @@ class RustAssistantServer {
 
     this.setupToolHandlers();
     this.setupResourceHandlers();
+    this.setupErrorHandlers();
     
-    // Error handling
     this.server.onerror = (error) => console.error('[MCP Error]', error);
     process.on('SIGINT', async () => {
       await this.server.close();
@@ -39,7 +54,127 @@ class RustAssistantServer {
     });
   }
 
-  private setupToolHandlers() {
+  private findCodeLocation(code: string, pattern: string): { line: number, column: number } | undefined {
+    const lines = code.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes(pattern)) {
+        return {
+          line: i + 1,
+          column: line.indexOf(pattern) + 1
+        };
+      }
+    }
+    return undefined;
+  }
+
+  private async generateRustSuggestions(code: string): Promise<Array<{
+    type: string;
+    message: string;
+    severity: string;
+    example?: string;
+  }>> {
+    const suggestions: Array<{
+      type: string;
+      message: string;
+      severity: string;
+      example?: string;
+    }> = [];
+    
+    // Check for unwrap() usage
+    if (code.includes('.unwrap()')) {
+      suggestions.push({
+        type: 'error_handling',
+        message: 'Consider using proper error handling with Result or Option instead of unwrap()',
+        severity: 'warning',
+        example: `// Instead of:
+let value = some_result.unwrap();
+
+// Use:
+let value = some_result?; // or match/if let for more control`
+      });
+    }
+
+    // Check for clone() usage
+    if (code.includes('.clone()')) {
+      suggestions.push({
+        type: 'performance',
+        message: 'Avoid unnecessary cloning - consider using references or Rc/Arc if shared ownership is needed',
+        severity: 'warning'
+      });
+    }
+
+    // Check for missing documentation
+    if (!code.includes('///')) {
+      suggestions.push({
+        type: 'documentation',
+        message: 'Add documentation comments using /// for public items',
+        severity: 'info'
+      });
+    }
+
+    return suggestions;
+  }
+
+  private async analyzeMacroHygiene(code: string): Promise<Array<{
+    type: string;
+    message: string;
+    severity: string;
+    example?: string;
+    location?: { line: number, column: number };
+  }>> {
+    const issues: Array<{
+      type: string;
+      message: string;
+      severity: string;
+      example?: string;
+      location?: { line: number, column: number };
+    }> = [];
+
+    // Check for common macro hygiene issues
+    const macroPatterns = [
+      { 
+        pattern: /macro_rules!\s+\w+\s*\{/,
+        message: 'Macro definition should use proper hygiene practices',
+        severity: 'warning',
+        example: `// Use $crate:: for absolute paths in macros
+macro_rules! my_macro {
+    ($x:expr) => {
+        $crate::some_function($x)
+    }
+}`
+      },
+      {
+        pattern: /(\$[a-zA-Z_]\w*):(ident|expr|ty|pat|path|tt)/,
+        message: 'Macro variables should use proper hygiene practices',
+        severity: 'warning',
+        example: `// Use $crate:: for absolute paths in macros
+macro_rules! my_macro {
+    ($x:expr) => {
+        $crate::some_function($x)
+    }
+}`
+      }
+    ];
+
+    for (const {pattern, message, severity, example} of macroPatterns) {
+      const matches = code.matchAll(pattern);
+      for (const match of matches) {
+        const location = this.findCodeLocation(code, match[0]);
+        issues.push({
+          type: 'macro_hygiene',
+          message,
+          severity,
+          example,
+          location
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  private setupToolHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
@@ -48,14 +183,8 @@ class RustAssistantServer {
           inputSchema: {
             type: 'object',
             properties: {
-              code: {
-                type: 'string',
-                description: 'Rust source code to analyze'
-              },
-              fileName: {
-                type: 'string',
-                description: 'Name of the source file'
-              }
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' }
             },
             required: ['code']
           }
@@ -66,67 +195,348 @@ class RustAssistantServer {
           inputSchema: {
             type: 'object',
             properties: {
-              code: {
+              code: { type: 'string', description: 'Rust source code to improve' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'profile_performance',
+          description: 'Analyze and profile Rust code performance',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to profile' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              profileType: {
                 type: 'string',
-                description: 'Rust source code to improve'
-              },
-              fileName: {
+                enum: ['cpu', 'memory', 'io'],
+                description: 'Type of profiling to perform'
+              }
+            },
+            required: ['code', 'profileType']
+          }
+        },
+        {
+          name: 'analyze_memory_safety',
+          description: 'Check for memory safety issues in Rust code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'async_pattern_advisor',
+          description: 'Provide guidance on async/await patterns',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              runtime: {
                 type: 'string',
-                description: 'Name of the source file'
+                enum: ['tokio', 'async-std', 'smol'],
+                description: 'Async runtime being used'
               }
             },
             required: ['code']
           }
+        },
+        {
+          name: 'manage_dependencies',
+          description: 'Manage and optimize Cargo dependencies',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              cargoToml: { type: 'string', description: 'Contents of Cargo.toml' }
+            },
+            required: ['cargoToml']
+          }
+        },
+        {
+          name: 'format_code',
+          description: 'Format Rust code using rustfmt',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to format' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              config: {
+                type: 'object',
+                description: 'rustfmt configuration options'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'lint_code',
+          description: 'Lint Rust code using Clippy',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to lint' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'visualize_lifetimes',
+          description: 'Visualize and explain lifetime relationships',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'expand_macros',
+          description: 'Expand and explain Rust macros',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code with macros' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'analyze_test_coverage',
+          description: 'Analyze test coverage of Rust code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              tests: { type: 'string', description: 'Test code' }
+            },
+            required: ['code', 'tests']
+          }
+        },
+        {
+          name: 'run_benchmarks',
+          description: 'Run and analyze benchmarks',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust benchmark code' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              iterations: {
+                type: 'number',
+                description: 'Number of benchmark iterations',
+                minimum: 1
+              }
+            },
+            required: ['code', 'iterations']
+          }
+        },
+        {
+          name: 'analyze_macro_hygiene',
+          description: 'Analyze macro hygiene and potential issues',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code with macros' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'visualize_borrow_checker',
+          description: 'Visualize borrow checker rules and relationships',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'visualize_ownership',
+          description: 'Generate ownership and borrowing diagrams',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              depth: {
+                type: 'number',
+                description: 'Depth of ownership chain to visualize',
+                minimum: 1,
+                maximum: 10
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'debug_async_tasks',
+          description: 'Debug and visualize async task execution',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              runtime: {
+                type: 'string',
+                enum: ['tokio', 'async-std', 'smol'],
+                description: 'Async runtime being used'
+              }
+            },
+            required: ['code', 'runtime']
+          }
+        },
+        {
+          name: 'generate_tests',
+          description: 'Generate test cases based on code analysis',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              testFramework: {
+                type: 'string',
+                enum: ['standard', 'proptest', 'quickcheck'],
+                description: 'Test framework to use'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'analyze_dependencies',
+          description: 'Analyze and visualize dependency relationships',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              cargoToml: { type: 'string', description: 'Contents of Cargo.toml' },
+              depth: {
+                type: 'number',
+                description: 'Depth of dependency tree to analyze',
+                minimum: 1,
+                maximum: 5
+              }
+            },
+            required: ['cargoToml']
+          }
+        }
+      ]
+    }));
+  }
+
+  private setupResourceHandlers(): void {
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: [
+        {
+          uri: 'rust://reference/common-errors',
+          name: 'Rust Common Errors',
+          description: 'Reference guide to common Rust compiler errors and how to fix them',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/best-practices',
+          name: 'Rust Best Practices',
+          description: 'Guide to idiomatic Rust coding practices and patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://reference/lifetimes',
+          name: 'Rust Lifetime Reference',
+          description: 'Guide to understanding Rust\'s lifetime system',
+          mimeType: 'application/json'
         }
       ]
     }));
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      switch (request.params.name) {
-        case 'analyze_rust':
-          return this.handleRustAnalysis(request.params.arguments);
-        case 'suggest_improvements':
-          return this.handleRustSuggestions(request.params.arguments);
-        default:
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+      resourceTemplates: [
+        {
+          uriTemplate: 'rust://error/{errorCode}',
+          name: 'Rust Error Explanation',
+          description: 'Detailed explanation of specific Rust error codes',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://pattern/{patternName}',
+          name: 'Rust Pattern Reference',
+          description: 'Examples and explanations of common Rust patterns',
+          mimeType: 'application/json'
+        }
+      ]
+    }));
+  }
+
+
+  private setupValidationMiddleware(): void {
+    (this.server as any).use(async (request: Request, next: Function) => {
+      try {
+        // Validate input schemas
+        if (request.params?.arguments) {
+          const tool = (this.server as any).tools.find((t: any) => request.params && t.name === request.params.name);
+          if (tool) {
+            const validate = this.ajv.compile(tool.inputSchema);
+            if (!validate(request.params.arguments)) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                `Invalid arguments: ${JSON.stringify(validate.errors)}`
+              );
+            }
+          }
+        }
+        return await next();
+      } catch (error) {
+        if (error instanceof McpError) {
+          throw error;
+        }
+        if (error instanceof Error) {
           throw new McpError(
-            ErrorCode.MethodNotFound,
-            `Unknown tool: ${request.params.name}`
+            ErrorCode.InternalError,
+            error.message,
+            error.stack
           );
+        }
+        throw new McpError(
+          ErrorCode.InternalError,
+          'Unknown error occurred'
+        );
       }
     });
   }
 
-  private async handleRustAnalysis(args: any) {
-    // TODO: Implement Rust code analysis using rust-analyzer
-    return {
-      content: [{
-        type: 'text',
-        text: 'Rust analysis not yet implemented'
-      }]
-    };
+  private setupErrorHandlers(): void {
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      console.error({
+        code: ErrorCode.InternalError,
+        message: `Uncaught exception: ${error.message}`,
+        stack: error.stack
+      });
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      console.error({
+        code: ErrorCode.InternalError,
+        message: `Unhandled rejection: ${reason}`,
+        stack: new Error().stack
+      });
+    });
   }
 
-  private async handleRustSuggestions(args: any) {
-    // TODO: Implement Rust code suggestions
-    return {
-      content: [{
-        type: 'text',
-        text: 'Rust suggestions not yet implemented'
-      }]
-    };
-  }
-
-  private setupResourceHandlers() {
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-      resources: []
-    }));
-
-    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-      resourceTemplates: []
-    }));
-  }
-
-  async run() {
+  async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Rust Assistant MCP server running on stdio');
