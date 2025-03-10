@@ -1,67 +1,137 @@
 #!/usr/bin/env node
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-
-// Import required schemas for request handlers
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
-  ListToolsRequestSchema 
-} from "@modelcontextprotocol/sdk/types.js";
+  ErrorCode,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 
-const server = new Server(
-    {
-        name: "RustCodingAssistant",
-        version: "1.0.0", // Added missing version field
-        description: "MCP tool for Rust development assistance including analysis, best practices and debugging support"
-    },
-    {
-    capabilities: { 
-      resources: {},  // Add empty resource capability container
-      tools: {}       // Proper object structure instead of boolean flag
+class RustAssistantServer {
+  private server: Server;
+
+  constructor() {
+    this.server = new Server(
+      {
+        name: 'rust-assistant',
+        version: '0.1.0',
+      },
+      {
+        capabilities: {
+          resources: {},
+          tools: {},
         },
-    }
- );
+      }
+    );
 
-// Define the list of available tools with proper schema imports
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-   tools:[
+    this.setupToolHandlers();
+    this.setupResourceHandlers();
+    
+    // Error handling
+    this.server.onerror = (error) => console.error('[MCP Error]', error);
+    process.on('SIGINT', async () => {
+      await this.server.close();
+      process.exit(0);
+    });
+  }
+
+  private setupToolHandlers() {
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [
         {
-           name:'rust-analyze',
-           description:"Analyze Rust code for errors/suggestions",
-           inputSchema:{
-               type: 'object' as const,
-               properties:{
-                   code:{type:'string',description:"Rust source code to analyze"},
-                   fileName:{type:'string'}
-               },
-               required:['code']
-            }
-        } 
-   ]
-}));
+          name: 'analyze_rust',
+          description: 'Analyze Rust code for errors and warnings',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'Rust source code to analyze'
+              },
+              fileName: {
+                type: 'string',
+                description: 'Name of the source file'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'suggest_improvements',
+          description: 'Suggest improvements for Rust code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'Rust source code to improve'
+              },
+              fileName: {
+                type: 'string',
+                description: 'Name of the source file'
+              }
+            },
+            required: ['code']
+          }
+        }
+      ]
+    }));
 
-// Handle tool execution with null checks
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
- if(request?.params?.name === 'rust-analyze'){
-   const args = request.params?.arguments || {};
-   
-   // Safely access parameters and return proper structure
-   return { 
-     content:[{
-       type:'text',
-       text:`Analysis completed for ${args.fileName ?? "unnamed file"}`,
-       _meta:{}
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      switch (request.params.name) {
+        case 'analyze_rust':
+          return this.handleRustAnalysis(request.params.arguments);
+        case 'suggest_improvements':
+          return this.handleRustSuggestions(request.params.arguments);
+        default:
+          throw new McpError(
+            ErrorCode.MethodNotFound,
+            `Unknown tool: ${request.params.name}`
+          );
+      }
+    });
+  }
+
+  private async handleRustAnalysis(args: any) {
+    // TODO: Implement Rust code analysis using rust-analyzer
+    return {
+      content: [{
+        type: 'text',
+        text: 'Rust analysis not yet implemented'
       }]
     };
- }
- else {
-  return {}; // Return empty object if tool not recognized
- }
-});
+  }
 
-async function main() {
- const transport = new StdioServerTransport();
- await server.connect(transport);
+  private async handleRustSuggestions(args: any) {
+    // TODO: Implement Rust code suggestions
+    return {
+      content: [{
+        type: 'text',
+        text: 'Rust suggestions not yet implemented'
+      }]
+    };
+  }
+
+  private setupResourceHandlers() {
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: []
+    }));
+
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+      resourceTemplates: []
+    }));
+  }
+
+  async run() {
+    const transport = new StdioServerTransport();
+    await this.server.connect(transport);
+    console.error('Rust Assistant MCP server running on stdio');
+  }
 }
 
-main().catch(console.error);
+const server = new RustAssistantServer();
+server.run().catch(console.error);

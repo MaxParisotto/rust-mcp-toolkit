@@ -5,20 +5,41 @@
   "private": true,
   "type": "module",
   "bin": {
-    "rust-coding-assistant": "./build/index.js"
+    "rust-coding-assistant": "build/index.js"
   },
-  "files": ["src"],
+  "files": [
+    "src"
+  ],
   "scripts": {
-    "start": "node src.index.ts",
+    "start": "node ./src/index.js",
     "dev": "nodemon --exec ts-node -r esm ./src/index.ts",
-    "prod-build": "tsc && node build/index.js"
+    "prod-build": "npm run build && node dist/src/index.js",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.1"
+    "@modelcontextprotocol/sdk": "^0.6.1",
+    "rust-analyzer": "^0.0.1-security",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5",
+    "vscode-languageserver-textdocument": "^1.0.12"
   },
   "devDependencies": {
-    "@types/node": "^20.x",
-    "typescript": "^5.x",
-    "nodemon": "^3.x"
-  }
+    "@types/node": "^22.13.10",
+    "esm": "^3.2.25",
+    "nodemon": "^3.x",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaxParisotto/rust-mcp-toolkit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MaxParisotto/rust-mcp-toolkit/issues"
+  },
+  "homepage": "https://github.com/MaxParisotto/rust-mcp-toolkit#readme"
 }
