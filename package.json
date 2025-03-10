@@ -1,0 +1,24 @@
+{
+  "name": "rust-mcp-toolkit",
+  "version": "0.1.0",
+  "description": "Rust development assistant MCP tool",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "rust-coding-assistant": "./build/index.js"
+  },
+  "files": ["src"],
+  "scripts": {
+    "start": "node src.index.ts",
+    "dev": "nodemon --exec ts-node -r esm ./src/index.ts",
+    "prod-build": "tsc && node build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "typescript": "^5.x",
+    "nodemon": "^3.x"
+  }
+}
