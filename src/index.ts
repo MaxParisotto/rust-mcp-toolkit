@@ -43,28 +43,75 @@ class RustAssistantServer {
       }
     );
 
+    this.ajv = new Ajv();
     this.setupToolHandlers();
     this.setupResourceHandlers();
+    this.setupValidationMiddleware();
     this.setupErrorHandlers();
-    
-    this.server.onerror = (error) => console.error('[MCP Error]', error);
-    process.on('SIGINT', async () => {
-      await this.server.close();
-      process.exit(0);
-    });
-  }
-
-  private findCodeLocation(code: string, pattern: string): { line: number, column: number } | undefined {
-    const lines = code.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.includes(pattern)) {
-        return {
-          line: i + 1,
-          column: line.indexOf(pattern) + 1
-        };
-      }
-    }
+        {
+          name: 'rust_playground',
+          description: 'Execute Rust code snippets in a sandboxed environment',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The Rust code to execute'
+              },
+              edition: {
+                type: 'string',
+                enum: ['2015', '2018', '2021'],
+                description: 'Rust edition to use',
+                default: '2021'
+              },
+              crates: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'Additional crates to include'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'profile_performance',
+          description: 'Profile Rust code performance',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The Rust code to profile'
+              },
+              profileType: {
+                type: 'string',
+                enum: ['cpu', 'memory', 'io'],
+                description: 'Type of profiling to perform'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'cross_compile',
+          description: 'Cross-compile Rust code for different targets',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The Rust code to compile'
+              },
+              target: {
+                type: 'string',
+                description: 'Target triple (e.g. x86_64-unknown-linux-gnu)'
+              }
+            },
+            required: ['code', 'target']
+          }
+        }
     return undefined;
   }
 
@@ -432,6 +479,73 @@ macro_rules! my_macro {
             },
             required: ['cargoToml']
           }
+        },
+        {
+          name: 'compile_to_wasm',
+          description: 'Compile Rust code to WebAssembly',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to compile' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              optimize: {
+                type: 'boolean',
+                description: 'Enable WebAssembly optimization',
+                default: true
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'analyze_ffi',
+          description: 'Analyze and optimize FFI (Foreign Function Interface) code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust FFI code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              targetLanguage: {
+                type: 'string',
+                enum: ['c', 'cpp', 'python', 'nodejs'],
+                description: 'Target language for FFI'
+              }
+            },
+            required: ['code', 'targetLanguage']
+          }
+        },
+        {
+          name: 'embedded_analysis',
+          description: 'Analyze Rust code for embedded systems',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              target: {
+                type: 'string',
+                description: 'Embedded target (e.g. armv7, riscv32)'
+              }
+            },
+            required: ['code', 'target']
+          }
+        },
+        {
+          name: 'audit_unsafe',
+          description: 'Audit and analyze unsafe Rust code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to audit' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              strict: {
+                type: 'boolean',
+                description: 'Enable strict unsafe checking',
+                default: true
+              }
+            },
+            required: ['code']
+          }
         }
       ]
     }));
@@ -457,6 +571,24 @@ macro_rules! my_macro {
           name: 'Rust Lifetime Reference',
           description: 'Guide to understanding Rust\'s lifetime system',
           mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://reference/wasm',
+          name: 'WebAssembly Reference',
+          description: 'Guide to Rust WebAssembly compilation and optimization',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/embedded',
+          name: 'Embedded Rust Guide',
+          description: 'Best practices for Rust in embedded systems',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/ffi',
+          name: 'FFI Best Practices',
+          description: 'Patterns and techniques for Rust FFI',
+          mimeType: 'application/json'
         }
       ]
     }));
@@ -473,6 +605,18 @@ macro_rules! my_macro {
           uriTemplate: 'rust://pattern/{patternName}',
           name: 'Rust Pattern Reference',
           description: 'Examples and explanations of common Rust patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://concurrency/{patternName}',
+          name: 'Concurrency Pattern Reference',
+          description: 'Examples and explanations of Rust concurrency patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://unsafe/{patternName}',
+          name: 'Unsafe Code Patterns',
+          description: 'Examples and explanations of unsafe code patterns',
           mimeType: 'application/json'
         }
       ]
