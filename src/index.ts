@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StdioServerTransport, WebSocketServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import Ajv from 'ajv';
 import { 
   Request,
@@ -13,15 +13,6 @@ import {
   McpError,
   ReadResourceRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { TextDocuments } from 'vscode-languageserver';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import {
-  Diagnostic,
-  DiagnosticSeverity,
-  Position,
-  Range
-} from 'vscode-languageserver-types';
-import { ProposedFeatures, createConnection } from 'vscode-languageserver';
 
 class RustAssistantServer {
   private server: Server;
@@ -48,71 +39,74 @@ class RustAssistantServer {
     this.setupResourceHandlers();
     this.setupValidationMiddleware();
     this.setupErrorHandlers();
-        {
-          name: 'rust_playground',
-          description: 'Execute Rust code snippets in a sandboxed environment',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              code: {
-                type: 'string',
-                description: 'The Rust code to execute'
-              },
-              edition: {
-                type: 'string',
-                enum: ['2015', '2018', '2021'],
-                description: 'Rust edition to use',
-                default: '2021'
-              },
-              crates: {
-                type: 'array',
-                items: {
-                  type: 'string'
-                },
-                description: 'Additional crates to include'
-              }
+
+    // Define tools
+    this.tools.push({
+      name: 'rust_playground',
+      description: 'Execute Rust code snippets in a sandboxed environment',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: 'The Rust code to execute'
+          },
+          edition: {
+            type: 'string',
+            enum: ['2015', '2018', '2021'],
+            description: 'Rust edition to use',
+            default: '2021'
+          },
+          crates: {
+            type: 'array',
+            items: {
+              type: 'string'
             },
-            required: ['code']
+            description: 'Additional crates to include'
           }
         },
-        {
-          name: 'profile_performance',
-          description: 'Profile Rust code performance',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              code: {
-                type: 'string',
-                description: 'The Rust code to profile'
-              },
-              profileType: {
-                type: 'string',
-                enum: ['cpu', 'memory', 'io'],
-                description: 'Type of profiling to perform'
-              }
-            },
-            required: ['code']
+        required: ['code']
+      }
+    });
+
+    this.tools.push({
+      name: 'profile_performance',
+      description: 'Profile Rust code performance',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: 'The Rust code to profile'
+          },
+          profileType: {
+            type: 'string',
+            enum: ['cpu', 'memory', 'io'],
+            description: 'Type of profiling to perform'
           }
         },
-        {
-          name: 'cross_compile',
-          description: 'Cross-compile Rust code for different targets',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              code: {
-                type: 'string',
-                description: 'The Rust code to compile'
-              },
-              target: {
-                type: 'string',
-                description: 'Target triple (e.g. x86_64-unknown-linux-gnu)'
-              }
-            },
-            required: ['code', 'target']
+        required: ['code']
+      }
+    });
+
+    this.tools.push({
+      name: 'cross_compile',
+      description: 'Cross-compile Rust code for different targets',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: 'The Rust code to compile'
+          },
+          target: {
+            type: 'string',
+            description: 'Target triple (e.g. x86_64-unknown-linux-gnu)'
           }
-        }
-    return undefined;
+        },
+        required: ['code', 'target']
+      }
+    });
   }
 
   private async generateRustSuggestions(code: string): Promise<Array<{
@@ -623,7 +617,6 @@ macro_rules! my_macro {
     }));
   }
 
-
   private setupValidationMiddleware(): void {
     (this.server as any).use(async (request: Request, next: Function) => {
       try {
@@ -681,9 +674,17 @@ macro_rules! my_macro {
   }
 
   async run(): Promise<void> {
-    const transport = new StdioServerTransport();
+    const transportType = process.env.TRANSPORT || 'stdio';
+    let transport;
+
+    if (transportType === 'stdio') {
+      transport = new StdioServerTransport();
+    } else {
+      transport = new WebSocketServerTransport({ port: 3000 });
+    }
+
     await this.server.connect(transport);
-    console.error('Rust Assistant MCP server running on stdio');
+    console.log(`Rust Assistant MCP server running on ${transportType}`);
   }
 }
 
