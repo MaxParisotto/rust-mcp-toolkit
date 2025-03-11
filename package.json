@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "main": "build/index.js",
   "type": "module",
-"scripts": {
-  "build": "cargo build --release && tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
-  "start": "node build/index.js",
-  "build:rust": "cargo build --release",
-  "test:rust": "cargo test",
-  "clean": "cargo clean",
-  "lint": "eslint src/**/*.ts"
-},
+  "scripts": {
+    "build": "cargo build --release && tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/index.js",
+    "build:rust": "cargo build --release",
+    "test:rust": "cargo test",
+    "clean": "cargo clean",
+    "lint": "eslint src/**/*.ts"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.7.0",
+    "@modelcontextprotocol/sdk": "^1.7.0",
     "@napi-rs/cli": "^2.0.0",
     "@qdrant/js-client-rest": "^1.13.0",
     "@qdrant/qdrant-js": "^1.13.0",

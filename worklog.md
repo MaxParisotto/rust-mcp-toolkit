@@ -1,7 +1,9 @@
-# 2025-03-11
+# Worklog
 
-## Changes Made
+## 2025-03-11
 
-- Updated `src/services/qdrant.ts` to fetch real embeddings from an external service.
-- Corrected the `getCollection` method call to use a string argument.
-- Added logging for collection creation in `ensureCollection`.
+### Changes Made
+
+- Installed `@modelcontextprotocol/sdk` package.
+- Updated `tsconfig.json` with necessary paths and plugins.
+- Updated `eslint.config.js` to include SDK-specific rules and plugins.
