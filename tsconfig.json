@@ -12,18 +12,22 @@
     "outDir": "./build",
     "rootDir": "./src",
     "baseUrl": ".",
-"paths": {
-  "@modelcontextprotocol/sdk/*": ["node_modules/@modelcontextprotocol/sdk/dist/*"],
-  "src/*": ["./src/*"]
-},
-"plugins": [
-  { "name": "typescript-plugin-sdk", "options": {} }
-]
+    "paths": {
+      "@modelcontextprotocol/sdk/*": ["node_modules/@modelcontextprotocol/sdk/dist/*"],
+      "src/*": ["./src/*"]
+    },
+    "plugins": [
+      { "name": "typescript-plugin-sdk", "options": {} }
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": [
     "./src/**/*"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "../eslint.config.js",
+    "../eslintrc.cjs"
   ]
 }

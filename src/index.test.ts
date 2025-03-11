@@ -1,4 +1,4 @@
-import { RustAssistantServer } from './index';
+import { RustAssistantServer } from './index.js';
 import { McpError } from '@modelcontextprotocol/sdk/types';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';

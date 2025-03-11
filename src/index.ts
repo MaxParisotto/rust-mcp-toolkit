@@ -690,3 +690,243 @@ macro_rules! my_macro {
 
 const server = new RustAssistantServer();
 server.run().catch(console.error);
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'analyze_dependencies',
+          description: 'Analyze and visualize dependency relationships',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              cargoToml: { type: 'string', description: 'Contents of Cargo.toml' },
+              depth: {
+                type: 'number',
+                description: 'Depth of dependency tree to analyze',
+                minimum: 1,
+                maximum: 5
+              }
+            },
+            required: ['cargoToml']
+          }
+        },
+        {
+          name: 'compile_to_wasm',
+          description: 'Compile Rust code to WebAssembly',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to compile' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              optimize: {
+                type: 'boolean',
+                description: 'Enable WebAssembly optimization',
+                default: true
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'analyze_ffi',
+          description: 'Analyze and optimize FFI (Foreign Function Interface) code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust FFI code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              targetLanguage: {
+                type: 'string',
+                enum: ['c', 'cpp', 'python', 'nodejs'],
+                description: 'Target language for FFI'
+              }
+            },
+            required: ['code', 'targetLanguage']
+          }
+        },
+        {
+          name: 'embedded_analysis',
+          description: 'Analyze Rust code for embedded systems',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to analyze' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              target: {
+                type: 'string',
+                description: 'Embedded target (e.g. armv7, riscv32)'
+              }
+            },
+            required: ['code', 'target']
+          }
+        },
+        {
+          name: 'audit_unsafe',
+          description: 'Audit and analyze unsafe Rust code',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Rust source code to audit' },
+              fileName: { type: 'string', description: 'Name of the source file' },
+              strict: {
+                type: 'boolean',
+                description: 'Enable strict unsafe checking',
+                default: true
+              }
+            },
+            required: ['code']
+          }
+        }
+      ]
+    }));
+  }
+
+  private setupResourceHandlers(): void {
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: [
+        {
+          uri: 'rust://reference/common-errors',
+          name: 'Rust Common Errors',
+          description: 'Reference guide to common Rust compiler errors and how to fix them',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/best-practices',
+          name: 'Rust Best Practices',
+          description: 'Guide to idiomatic Rust coding practices and patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://reference/lifetimes',
+          name: 'Rust Lifetime Reference',
+          description: 'Guide to understanding Rust\'s lifetime system',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://reference/wasm',
+          name: 'WebAssembly Reference',
+          description: 'Guide to Rust WebAssembly compilation and optimization',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/embedded',
+          name: 'Embedded Rust Guide',
+          description: 'Best practices for Rust in embedded systems',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'rust://guide/ffi',
+          name: 'FFI Best Practices',
+          description: 'Patterns and techniques for Rust FFI',
+          mimeType: 'application/json'
+        }
+      ]
+    }));
+
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+      resourceTemplates: [
+        {
+          uriTemplate: 'rust://error/{errorCode}',
+          name: 'Rust Error Explanation',
+          description: 'Detailed explanation of specific Rust error codes',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://pattern/{patternName}',
+          name: 'Rust Pattern Reference',
+          description: 'Examples and explanations of common Rust patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://concurrency/{patternName}',
+          name: 'Concurrency Pattern Reference',
+          description: 'Examples and explanations of Rust concurrency patterns',
+          mimeType: 'application/json'
+        },
+        {
+          uriTemplate: 'rust://unsafe/{patternName}',
+          name: 'Unsafe Code Patterns',
+          description: 'Examples and explanations of unsafe code patterns',
+          mimeType: 'application/json'
+        }
+      ]
+    }));
+  }
+
+  private setupValidationMiddleware(): void {
+    (this.server as any).use(async (request: Request, next: Function) => {
+      try {
+        // Validate input schemas
+        if (request.params?.arguments) {
+          const tool = (this.server as any).tools.find((t: any) => request.params && t.name === request.params.name);
+          if (tool) {
+            const validate = this.ajv.compile(tool.inputSchema);
+            if (!validate(request.params.arguments)) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                `Invalid arguments: ${JSON.stringify(validate.errors)}`
+              );
+            }
+          }
+        }
+        return await next();
+      } catch (error) {
+        if (error instanceof McpError) {
+          throw error;
+        }
+        if (error instanceof Error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            error.message,
+            error.stack
+          );
+        }
+        throw new McpError(
+          ErrorCode.InternalError,
+          'Unknown error occurred'
+        );
+      }
+    });
+  }
+
+  private setupErrorHandlers(): void {
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      console.error({
+        code: ErrorCode.InternalError,
+        message: `Uncaught exception: ${error.message}`,
+        stack: error.stack
+      });
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      console.error({
+        code: ErrorCode.InternalError,
+        message: `Unhandled rejection: ${reason}`,
+        stack: new Error().stack
+      });
+    });
+  }
+
+  async run(): Promise<void> {
+    const transportType = process.env.TRANSPORT || 'stdio';
+    let transport;
+
+    if (transportType === 'stdio') {
+      transport = new StdioServerTransport();
+    } else {
+      transport = new WebSocketServerTransport({ port: 3000 });
+    }
+
+    await this.server.connect(transport);
+    console.log(`Rust Assistant MCP server running on ${transportType}`);
+  }
+}
+
+const server = new RustAssistantServer();
+server.run().catch(console.error);
+
+export { RustAssistantServer };
