@@ -1,71 +1,50 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-const QDRANT_URL = process.env.QDRANT_URL || 'http://192.168.2.190:6333';
-const COLLECTION_NAME = 'mcp';
-export const qdrantClient = new QdrantClient({
-    url: QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY // Include API key if required
+const qdrantClient = new QdrantClient({
+    url: 'http://192.168.2.190:6333',
 });
-// Ensure collection exists before operations
-export async function ensureCollection() {
-    try {
-        await qdrantClient.getCollection(COLLECTION_NAME);
-    }
-    catch (error) {
-        if (error instanceof Error) {
-            console.error(`Failed to get collection: ${error.message}`);
+export { qdrantClient };
+export async function createCollection(collectionName) {
+    return qdrantClient.createCollection(collectionName, {
+        vectors: {
+            size: 1536,
+            distance: 'Cosine'
         }
-        else {
-            console.error('An unknown error occurred while getting the collection.');
-        }
-        try {
-            const params = {
-                vectors: {
-                    size: 128, // Example vector size, adjust as needed
-                    distance: 'Cosine' // Ensure the type is one of the allowed literals
-                },
-                hnsw_config: {
-                    m: 16,
-                    ef_construct: 100,
-                    full_scan_threshold: 10000
-                }
-            };
-            await qdrantClient.createCollection(COLLECTION_NAME, params);
-            console.log(`Collection ${COLLECTION_NAME} created successfully.`);
-        }
-        catch (error) {
-            if (error instanceof Error) {
-                console.error(`Failed to create collection: ${error.message}`);
-            }
-            else {
-                console.error('An unknown error occurred while creating the collection.');
-            }
-        }
-    }
+    });
 }
-// Fetch real embedding vector from an external service
-export async function fetchEmbedding(text) {
-    const EMBEDDING_SERVICE_URL = process.env.EMBEDDING_SERVICE_URL || 'http://localhost:5001/embeddings';
+export async function storeDocument(collectionName, id, text) {
+    const vector = await fetchEmbedding(text);
     try {
-        const response = await fetch(EMBEDDING_SERVICE_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ text })
+        await qdrantClient.upsertPoints(collectionName, {
+            points: [{
+                    id: Number(id),
+                    vector,
+                    payload: { text }
+                }]
         });
-        if (!response.ok) {
-            throw new Error(`Failed to generate embedding. Status code: ${response.status}`);
-        }
-        const responseData = await response.json();
-        return responseData.vector;
     }
     catch (error) {
-        if (error instanceof Error) {
-            console.error(`Error fetching embedding: ${error.message}`);
-        }
-        else {
-            console.error('An unknown error occurred while fetching the embedding.');
+        if (error instanceof Error && error.message.includes('not found')) {
+            await createCollection(collectionName);
+            return storeDocument(collectionName, id, text);
         }
         throw error;
     }
+}
+export async function retrieveDocument(collectionName, id) {
+    return qdrantClient.getPoint(collectionName, Number(id), {
+        with_vectors: true,
+        with_payload: true
+    });
+}
+export async function searchSimilarDocuments(queryVector, collectionName, limit = 5) {
+    return qdrantClient.searchPoints(collectionName, {
+        vector: { name: 'vector', vector: queryVector },
+        limit,
+        with_payload: true,
+        with_vectors: true
+    });
+}
+export async function fetchEmbedding(_text) {
+    // TODO: Replace with actual embedding model
+    return Array(1536).fill(0).map(() => Math.random());
 }

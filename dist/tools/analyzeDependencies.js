@@ -1,12 +1,12 @@
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types';
+import { McpError } from '@modelcontextprotocol/sdk/types';
 export async function analyzeDependencies(request) {
     // Example logic for analyzing dependencies
     if (!request.params.arguments || typeof request.params.arguments !== 'object') {
-        throw new McpError(ErrorCode.InvalidRequest, 'Invalid arguments');
+        throw new McpError('Invalid arguments');
     }
     const { projectPath } = request.params.arguments;
     if (typeof projectPath !== 'string') {
-        throw new McpError({ code: ErrorCode.InvalidRequest, message: 'Project path must be a string' });
+        throw new McpError('Project path must be a string');
     }
     // Placeholder for actual dependency analysis logic
     const dependencies = await getDependencies(projectPath);
