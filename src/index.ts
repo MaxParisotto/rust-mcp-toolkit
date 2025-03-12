@@ -26,11 +26,12 @@ class RustAssistantServer {
     });
   }
 
-  public run() {
+  async run() {
     const transport = new StdioServerTransport();
-    this.server.connect(transport).catch(console.error);
-    console.error('Rust Assistant MCP server running on stdio');
+    await this.server.connect(transport);
+    console.error('Rust MCP server running on stdio');
   }
 }
 
-export { RustAssistantServer };
+const server = new RustAssistantServer();
+server.run().catch(console.error);

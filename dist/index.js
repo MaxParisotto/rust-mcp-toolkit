@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RustAssistantServer = void 0;
-const server_1 = require("@modelcontextprotocol/sdk/dist/cjs/server");
+const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
+const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 class RustAssistantServer {
     server;
     constructor() {
-        this.server = new server_1.Server({
+        this.server = new index_js_1.Server({
             name: 'rust-assistant-server',
             version: '0.1.0',
         }, {
@@ -22,7 +23,7 @@ class RustAssistantServer {
         });
     }
     run() {
-        const transport = new server_1.StdioServerTransport();
+        const transport = new stdio_js_1.StdioServerTransport();
         this.server.connect(transport).catch(console.error);
         console.error('Rust Assistant MCP server running on stdio');
     }
