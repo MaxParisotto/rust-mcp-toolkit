@@ -1,42 +1,13 @@
-import { QdrantClient } from '@qdrant/js-client-rest';
-
-const QDRANT_URL = process.env.QDRANT_URL || 'http://192.168.2.190:6333';
-const COLLECTION_NAME = 'mcp';
-
-export const qdrantClient = new QdrantClient({ 
-    url: QDRANT_URL, 
-    apiKey: process.env.QDRANT_API_KEY // Include API key if required
-});
-
-// Ensure collection exists before operations
-export async function ensureCollection() {
-  try { await qdrantClient.getCollection(COLLECTION_NAME); }
-   catch (error) {
-     const params = { name: COLLECTION_NAME };
-     await qdrantClient.createCollection(params);
-     console.log(`Collection ${COLLECTION_NAME} created successfully.`);
-   }
-}
+import { qdrantClient, ensureCollection, fetchEmbedding } from './common';
+import { EMBEDDING_SERVICE_URL } from '../config';
 
 // Store document and return the embedding vector
 export async function storeDocument(text, metadata) {
-  // Fetch real embedding vector from an external service
-  const response = await fetch('http://localhost:5001/embeddings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ text })
-  });
-  if (!response.ok) {
-    throw new Error('Failed to generate embedding');
-  }
-  const responseData = await response.json();
-  const vector = responseData.vector;
-  
-  try{
-     await qdrantClient.upsert(
-      COLLECTION_NAME,
+  const vector = await fetchEmbedding(text);
+
+  try {
+    await qdrantClient.upsert(
+      'mcp',
       {
         points: [{
           id: Math.floor(Date.now()).toString(),
@@ -45,8 +16,52 @@ export async function storeDocument(text, metadata) {
         }]
       }
     );
-    return vector; // Return the embedding vector
-  }catch(error){
-    throw new Error('Qdrant insertion failed')
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`[storeDocument] Qdrant insertion failed for text: ${text}. Error: ${error.message}`);
+      throw error;
+    } else {
+      console.error('[storeDocument] An unknown error occurred while inserting into Qdrant.');
+      throw new Error('Qdrant insertion failed');
+    }
+  }
+}
+
+// Retrieve document by ID
+export async function retrieveDocument(id) {
+  try {
+    const response = await qdrantClient.search('mcp', {
+      vector: [0], // Placeholder vector, replace with actual vector if needed
+      filter: { must: [{ key: 'id', match: { value: id } }] },
+      limit: 1
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`[retrieveDocument] Failed to retrieve document with ID ${id}. Error: ${error.message}`);
+      throw error;
+    } else {
+      console.error('[retrieveDocument] An unknown error occurred while retrieving the document.');
+      throw new Error('Failed to retrieve document');
+    }
+  }
+}
+
+// Search similar documents
+export async function searchSimilarDocuments(vector, limit = 5) {
+  try {
+    const response = await qdrantClient.search('mcp', {
+      vector: vector,
+      limit: limit
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`[searchSimilarDocuments] Failed to search similar documents. Vector: ${vector}. Limit: ${limit}. Error: ${error.message}`);
+      throw error;
+    } else {
+      console.error('[searchSimilarDocuments] An unknown error occurred while searching similar documents.');
+      throw new Error('Failed to search similar documents');
+    }
   }
 }
