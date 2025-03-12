@@ -1,4 +1,4 @@
-import { QdrantClient } from '@qdrant/js-client-rest';
+import { Api } from 'qdrant-client';
 
 const qdrantUrl = process.env.QDRANT_URL || 'http://192.168.2.190:6333';
 export const collectionName = process.env.COLLECTION_NAME || 'mcp';
@@ -6,12 +6,17 @@ export const collectionName = process.env.COLLECTION_NAME || 'mcp';
 console.log(`Qdrant URL: ${qdrantUrl}`);
 console.log(`Collection Name: ${collectionName}`);
 
-class QdrantService {
-  private static instance: QdrantClient;
+const config = {
+  basePath: qdrantUrl,
+};
 
-  public static getInstance(): QdrantClient {
+class QdrantService {
+  private static instance: Api;
+
+  public static getInstance(): Api {
     if (!QdrantService.instance) {
-      QdrantService.instance = new QdrantClient({ url: qdrantUrl });
+      // Directly initialize the Api class with an empty object
+      QdrantService.instance = new Api(config as any);
     }
     return QdrantService.instance;
   }
@@ -23,15 +28,18 @@ const qdrantClient = QdrantService.getInstance();
 
 async function ensureCollection(): Promise<void> {
   try {
-    await qdrantClient.getCollection(collectionName);
+    await qdrantClient.collections.getCollection({ collection_name: collectionName });
     console.log(`Collection ${collectionName} already exists.`);
   } catch (error: any) {
     if (error.status === 404) {
-      await qdrantClient.createCollection(collectionName, {
-        vectors: {
-          size: 1536, // Example vector size
-          distance: 'Cosine',
+      await qdrantClient.collections.upsertCollection({
+        create_collection: {
+          vectors: {
+            size: 1536, // Example vector size
+            distance: 'Cosine',
+          },
         },
+        collection_name: collectionName,
       });
       console.log(`Collection ${collectionName} created.`);
     } else {
@@ -42,7 +50,8 @@ async function ensureCollection(): Promise<void> {
 
 async function storeDocument(text: string, metadata: Record<string, any>): Promise<void> {
   const vector = await generateVector(text); // Assuming a function to generate vectors
-  await qdrantClient.upsert(collectionName, {
+  await qdrantClient.points.upsertPoints({
+    collection_name: collectionName,
     points: [
       {
         id: Date.now().toString(), // Simple ID generation for demonstration purposes
@@ -54,17 +63,23 @@ async function storeDocument(text: string, metadata: Record<string, any>): Promi
 }
 
 async function retrieveDocument(id: string): Promise<any> {
-  const response = await qdrantClient.retrieve(collectionName, {
-    ids: [id],
+  const response = await qdrantClient.points.getPoint({
+    collection_name: collectionName,
+    id,
     with_payload: true,
   });
   return response;
 }
 
 async function searchSimilarDocuments(vector: number[], limit = 5): Promise<any> {
-  const response = await qdrantClient.search(collectionName, {
-    vector,
-    limit,
+  const response = await qdrantClient.points.searchPoints({
+    collection_name: collectionName,
+    vector_search_query: {
+      vector,
+      params: {
+        top: limit,
+      },
+    },
   });
   return response;
 }

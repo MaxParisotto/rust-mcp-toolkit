@@ -9,7 +9,7 @@ export async function analyzeDependencies(request: any): Promise<any> {
   const { projectPath } = request.params.arguments as { projectPath: string };
 
   if (typeof projectPath !== 'string') {
-    throw new McpError(ErrorCode.InvalidRequest, 'Project path must be a string');
+    throw new McpError({ code: ErrorCode.InvalidRequest, message: 'Project path must be a string' });
   }
 
   // Placeholder for actual dependency analysis logic

@@ -1,32 +1,54 @@
-"use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'; // Adjusted import
+import { z } from 'zod';
+// Define a Zod schema for the request
+const validateRequestSchema = z.object({
+    method: z.literal('validate'),
+    params: z.object({
+        arguments: z.object({
+            information: z.string(),
+            metadata: z.any().optional()
+        })
+    })
+});
+const storeQdrantRequestSchema = z.object({
+    method: z.literal('store_qdrant'),
+    params: z.object({
+        arguments: z.object({
+            information: z.string(),
+            metadata: z.any().optional()
+        })
+    })
+});
+export async function setupToolHandlers(server) {
+    server.setRequestHandler(validateRequestSchema, async (request) => {
+        // Example validation logic
+        const { information } = request.params.arguments; // Corrected property access
+        if (!information || typeof information !== 'string') {
+            throw new McpError(ErrorCode.InvalidRequest, 'Invalid arguments');
+        }
+        // Perform validation
+        if (!information.trim()) {
+            throw new McpError(ErrorCode.InvalidRequest, 'Input cannot be empty');
+        }
+        return { result: 'Validation successful' };
     });
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.setupToolHandlers = setupToolHandlers;
-const server_1 = require("@modelcontextprotocol/sdk/server");
-function setupToolHandlers(server) {
-    return __awaiter(this, void 0, void 0, function* () {
-        server.setRequestHandler('validate', (request) => __awaiter(this, void 0, void 0, function* () {
-            // Example validation logic
-            if (!request.params.arguments || typeof request.params.arguments !== 'object') {
-                throw new server_1.McpError(server_1.ErrorCode.InvalidRequest, 'Invalid arguments');
+    server.setRequestHandler(storeQdrantRequestSchema, async (request) => {
+        // Example logic to store data in Qdrant DB
+        const { information } = request.params.arguments; // Corrected property access
+        if (!information || typeof information !== 'string') {
+            throw new McpError(ErrorCode.InvalidRequest, 'Information must be a string');
+        }
+        try {
+            // Logic to store data in Qdrant DB
+            console.log('Storing information:', information);
+            // Placeholder for actual storage logic
+            return { result: 'Data stored successfully' };
+        }
+        catch (error) {
+            if (error instanceof Error) {
+                throw new McpError(ErrorCode.InternalError, `Failed to store data: ${error.message}`);
             }
-            const { input } = request.params.arguments;
-            if (typeof input !== 'string') {
-                throw new server_1.McpError(server_1.ErrorCode.InvalidRequest, 'Input must be a string');
-            }
-            // Perform validation
-            if (!input.trim()) {
-                throw new server_1.McpError(server_1.ErrorCode.InvalidRequest, 'Input cannot be empty');
-            }
-            return { result: 'Validation successful' };
-        }));
+            throw new McpError(ErrorCode.InternalError, 'An unknown error occurred while storing data');
+        }
     });
 }
