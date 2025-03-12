@@ -1,4 +1,4 @@
-import { ensureCollection, storeDocument, retrieveDocument, searchSimilarDocuments } from './qdrant.ts';
+import { ensureCollection, storeDocument, retrieveDocument, searchSimilarDocuments } from './qdrant';
 
 // Mock data for testing
 const mockText = 'This is a test document.';

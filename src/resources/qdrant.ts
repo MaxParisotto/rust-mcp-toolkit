@@ -1,4 +1,4 @@
-import { qdrantClient, storeDocument } from '../services/qdrant.js';
+import { qdrantClient, storeDocument, collectionName } from '../services/qdrant';
 
 export async function getCrateInfo(crateName: string) {
   try {
@@ -9,7 +9,7 @@ export async function getCrateInfo(crateName: string) {
       throw new Error('Invalid vector returned from storeDocument');
     }
 
-    const response = await qdrantClient.search('crates', {
+    const response = await qdrantClient.search(collectionName, {
       vector: vector,
       limit: 1,
       filter: { key: 'name', match: { value: crateName } },
@@ -31,7 +31,7 @@ export async function getRustBookSection(section: string) {
       throw new Error('Invalid vector returned from storeDocument');
     }
 
-    const response = await qdrantClient.search('rust-book', {
+    const response = await qdrantClient.search(collectionName, {
       vector: vector,
       limit: 1,
       filter: { key: 'section', match: { value: section } },

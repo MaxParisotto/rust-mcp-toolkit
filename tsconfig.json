@@ -1,33 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ESNext"],
-    "allowJs": true,
+    "target": "ES6",
+    "module": "commonjs",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "./build",
-    "rootDir": "./src",
-    "baseUrl": ".",
-    "paths": {
-      "@modelcontextprotocol/sdk/*": ["node_modules/@modelcontextprotocol/sdk/dist/*"],
-      "src/*": ["./src/*"]
-    },
-    "plugins": [
-      { "name": "typescript-plugin-sdk", "options": {} }
-    ],
-    "allowImportingTsExtensions": true,
-    "noEmit": true
+    "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "./src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "../eslint.config.js",
-    "../eslintrc.cjs"
-  ]
+  "include": ["src/**/*", "declarations.d.ts"],
+  "exclude": ["build", "logs", "node_modules"]
 }

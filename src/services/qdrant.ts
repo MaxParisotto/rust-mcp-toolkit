@@ -1,74 +1,78 @@
-import { qdrantClient, ensureCollection, fetchEmbedding } from './common';
-import { EMBEDDING_SERVICE_URL } from '../config';
+import { QdrantClient } from '@qdrant/js-client-rest';
 
-// Define types for Qdrant responses
-interface QdrantPoint {
-  id: string | number;
-  version: number;
-  score: number;
-  payload?: Record<string, unknown> | null; // Allow payload to be null or undefined
-  vector?: number[] | number[][] | Record<string, unknown>[] | Record<string, unknown> | null; // Allow vector to be more complex types
+const qdrantUrl = process.env.QDRANT_URL || 'http://192.168.2.190:6333';
+export const collectionName = process.env.COLLECTION_NAME || 'mcp';
+
+console.log(`Qdrant URL: ${qdrantUrl}`);
+console.log(`Collection Name: ${collectionName}`);
+
+class QdrantService {
+  private static instance: QdrantClient;
+
+  public static getInstance(): QdrantClient {
+    if (!QdrantService.instance) {
+      QdrantService.instance = new QdrantClient({ url: qdrantUrl });
+    }
+    return QdrantService.instance;
+  }
+
+  private constructor() {}
 }
 
-type QdrantSearchResponse = QdrantPoint[];
+const qdrantClient = QdrantService.getInstance();
 
-// Store document and return the embedding vector
-export async function storeDocument(text: string, metadata?: Record<string, any>): Promise<void> {
-  const vector = await fetchEmbedding(text);
-
+async function ensureCollection(): Promise<void> {
   try {
-    await qdrantClient.upsert(
-      'mcp',
+    await qdrantClient.getCollection(collectionName);
+    console.log(`Collection ${collectionName} already exists.`);
+  } catch (error: any) {
+    if (error.status === 404) {
+      await qdrantClient.createCollection(collectionName, {
+        vectors: {
+          size: 1536, // Example vector size
+          distance: 'Cosine',
+        },
+      });
+      console.log(`Collection ${collectionName} created.`);
+    } else {
+      throw new Error(`Failed to ensure collection: ${error.message}`);
+    }
+  }
+}
+
+async function storeDocument(text: string, metadata: Record<string, any>): Promise<void> {
+  const vector = await generateVector(text); // Assuming a function to generate vectors
+  await qdrantClient.upsert(collectionName, {
+    points: [
       {
-        points: [{
-          id: Math.floor(Date.now()).toString(),
-          payload: { text, ...metadata },
-          vector: vector
-        }]
+        id: Date.now().toString(), // Simple ID generation for demonstration purposes
+        vector,
+        payload: { text, ...metadata },
       }
-    );
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Qdrant insertion failed: ${error.message}`);
-    } else {
-      throw new Error('Qdrant insertion failed');
-    }
-  }
+    ]
+  });
 }
 
-// Retrieve document by ID
-export async function retrieveDocument(id: string): Promise<QdrantSearchResponse> {
-  try {
-    const response = await qdrantClient.search('mcp', {
-      vector: [0], // Placeholder vector, replace with actual vector if needed
-      filter: { must: [{ key: 'id', match: { value: id } }] },
-      limit: 1
-    });
-    return response;
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Failed to retrieve document with ID ${id}: ${error.message}`);
-    } else {
-      console.error('An unknown error occurred while retrieving the document.');
-    }
-    throw error;
-  }
+async function retrieveDocument(id: string): Promise<any> {
+  const response = await qdrantClient.retrieve(collectionName, {
+    ids: [id],
+    with_payload: true,
+  });
+  return response;
 }
 
-// Search similar documents
-export async function searchSimilarDocuments(vector: number[], limit = 0): Promise<QdrantSearchResponse> {
-  try {
-    const response = await qdrantClient.search('mcp', {
-      vector: vector,
-      limit: limit
-    });
-    return response;
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Failed to search similar documents: ${error.message}`);
-    } else {
-      console.error('An unknown error occurred while searching similar documents.');
-    }
-    throw error;
-  }
+async function searchSimilarDocuments(vector: number[], limit = 5): Promise<any> {
+  const response = await qdrantClient.search(collectionName, {
+    vector,
+    limit,
+  });
+  return response;
 }
+
+function generateVector(text: string): number[] {
+  // Placeholder for vector generation logic
+  // In a real-world scenario, this would involve using an embedding model to convert text to vectors
+  return Array(1536).fill(0); // Dummy vector of length 1536 (example size)
+}
+
+export { qdrantClient, storeDocument, retrieveDocument, searchSimilarDocuments, ensureCollection };
