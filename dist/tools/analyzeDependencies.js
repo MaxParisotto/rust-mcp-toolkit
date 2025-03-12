@@ -1,15 +1,12 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.analyzeDependencies = analyzeDependencies;
-const types_1 = require("@modelcontextprotocol/sdk/types");
-async function analyzeDependencies(request) {
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types';
+export async function analyzeDependencies(request) {
     // Example logic for analyzing dependencies
     if (!request.params.arguments || typeof request.params.arguments !== 'object') {
-        throw new types_1.McpError(types_1.ErrorCode.InvalidRequest, 'Invalid arguments');
+        throw new McpError(ErrorCode.InvalidRequest, 'Invalid arguments');
     }
     const { projectPath } = request.params.arguments;
     if (typeof projectPath !== 'string') {
-        throw new types_1.McpError({ code: types_1.ErrorCode.InvalidRequest, message: 'Project path must be a string' });
+        throw new McpError({ code: ErrorCode.InvalidRequest, message: 'Project path must be a string' });
     }
     // Placeholder for actual dependency analysis logic
     const dependencies = await getDependencies(projectPath);

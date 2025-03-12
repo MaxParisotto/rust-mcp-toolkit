@@ -1,4 +1,4 @@
-import { qdrantClient, storeDocument } from '../services/qdrant.js';
+import { storeDocument } from '../services/qdrant.js';
 
 async function fetchCrateDocs(crateName: string) {
   // Example logic to fetch crate documentation

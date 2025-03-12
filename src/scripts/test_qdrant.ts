@@ -1,4 +1,4 @@
-import { qdrantClient, storeDocument, retrieveDocument, searchSimilarDocuments } from '../services/qdrant.js';
+import { storeDocument, retrieveDocument, searchSimilarDocuments } from '../services/qdrant.js';
 
 async function testQdrant() {
   // Example logic to test Qdrant functionality
