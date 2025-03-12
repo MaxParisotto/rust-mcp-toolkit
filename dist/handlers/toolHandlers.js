@@ -1,3 +1,7 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MyServer = void 0;
 // Remove unused ToolResponse interface
-export class MyServer {
+class MyServer {
 }
+exports.MyServer = MyServer;

@@ -1,12 +1,16 @@
-import { qdrantClient, storeDocument, collectionName } from '../services/qdrant';
-export async function getCrateInfo(crateName) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getCrateInfo = getCrateInfo;
+exports.getRustBookSection = getRustBookSection;
+const qdrant_1 = require("../services/qdrant");
+async function getCrateInfo(crateName) {
     try {
         // Fetch meaningful embedding vector using storeDocument
-        const vector = await storeDocument(`Crate info for ${crateName}`, { name: crateName });
+        const vector = await (0, qdrant_1.storeDocument)(`Crate info for ${crateName}`, { name: crateName });
         if (!Array.isArray(vector)) {
             throw new Error('Invalid vector returned from storeDocument');
         }
-        const response = await qdrantClient.search(collectionName, {
+        const response = await qdrant_1.qdrantClient.search(qdrant_1.collectionName, {
             vector: vector,
             limit: 1,
             filter: { key: 'name', match: { value: crateName } },
@@ -19,14 +23,14 @@ export async function getCrateInfo(crateName) {
         throw new Error(`Failed to fetch crate info for ${crateName}`);
     }
 }
-export async function getRustBookSection(section) {
+async function getRustBookSection(section) {
     try {
         // Fetch meaningful embedding vector using storeDocument
-        const vector = await storeDocument(`Rust book section ${section}`, { section: section });
+        const vector = await (0, qdrant_1.storeDocument)(`Rust book section ${section}`, { section: section });
         if (!Array.isArray(vector)) {
             throw new Error('Invalid vector returned from storeDocument');
         }
-        const response = await qdrantClient.search(collectionName, {
+        const response = await qdrant_1.qdrantClient.search(qdrant_1.collectionName, {
             vector: vector,
             limit: 1,
             filter: { key: 'section', match: { value: section } },

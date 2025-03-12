@@ -1,5 +1,5 @@
-import { Server, StdioServerTransport } from '@modelcontextprotocol/sdk/dist/cjs/server';
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/dist/cjs/types';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 class RustAssistantServer {
   private server: Server;

@@ -1,14 +1,19 @@
-import { QdrantClient } from '@qdrant/js-client-rest';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.qdrantClient = void 0;
+exports.ensureCollection = ensureCollection;
+exports.fetchEmbedding = fetchEmbedding;
+const js_client_rest_1 = require("@qdrant/js-client-rest");
 const QDRANT_URL = process.env.QDRANT_URL || 'http://192.168.2.190:6333';
 const COLLECTION_NAME = 'mcp';
-export const qdrantClient = new QdrantClient({
+exports.qdrantClient = new js_client_rest_1.QdrantClient({
     url: QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY // Include API key if required
 });
 // Ensure collection exists before operations
-export async function ensureCollection() {
+async function ensureCollection() {
     try {
-        await qdrantClient.getCollection(COLLECTION_NAME);
+        await exports.qdrantClient.getCollection(COLLECTION_NAME);
     }
     catch (error) {
         if (error instanceof Error) {
@@ -29,7 +34,7 @@ export async function ensureCollection() {
                     full_scan_threshold: 10000
                 }
             };
-            await qdrantClient.createCollection(COLLECTION_NAME, params);
+            await exports.qdrantClient.createCollection(COLLECTION_NAME, params);
             console.log(`Collection ${COLLECTION_NAME} created successfully.`);
         }
         catch (error) {
@@ -43,7 +48,7 @@ export async function ensureCollection() {
     }
 }
 // Fetch real embedding vector from an external service
-export async function fetchEmbedding(text) {
+async function fetchEmbedding(text) {
     const EMBEDDING_SERVICE_URL = process.env.EMBEDDING_SERVICE_URL || 'http://localhost:5001/embeddings';
     try {
         const response = await fetch(EMBEDDING_SERVICE_URL, {

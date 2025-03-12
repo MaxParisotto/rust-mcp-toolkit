@@ -1,4 +1,6 @@
-import { storeDocument } from '../services/qdrant.js';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const qdrant_js_1 = require("../services/qdrant.js");
 async function fetchCrateDocs(crateName) {
     // Example logic to fetch crate documentation
     console.log(`Fetching documentation for ${crateName}`);
@@ -10,7 +12,7 @@ async function fetchCrateDocs(crateName) {
         const data = await response.text();
         console.log('Documentation fetched successfully');
         // Store the document in Qdrant
-        await storeDocument(data, { crateName });
+        await (0, qdrant_js_1.storeDocument)(data, { crateName });
     }
     catch (error) {
         if (error instanceof Error) {
